@@ -7,45 +7,78 @@ import (
 )
 
 const (
-	ScoreLose = 0
-	ScoreDraw = 3
-	ScoreWin  = 6
+	ScoreLose     = 0
+	ScoreDraw     = 3
+	ScoreWin      = 6
+	ShapeRock     = 1
+	ShapePaper    = 2
+	ShapeScissors = 3
 )
 
-type Shape struct {
-	Name  string
-	Value int
-}
-
-var (
-	Rock     = Shape{Name: "Rock", Value: 1}
-	Paper    = Shape{Name: "Paper", Value: 2}
-	Scissors = Shape{Name: "Scissors", Value: 3}
-)
-
-type Strategy struct {
-	Map map[byte]Shape
-}
-
-func (s Strategy) Outcome(opponent byte, self byte) (score int) {
-	opponentShape := s.Map[opponent]
-	selfShape := s.Map[self]
-
-	switch {
-	case opponentShape == selfShape:
-		return selfShape.Value + ScoreDraw
-	// Rock beats Scissors
-	case opponentShape == Scissors && selfShape == Rock:
-		return selfShape.Value + ScoreWin
-	// Scissors beats Paper
-	case opponentShape == Paper && selfShape == Scissors:
-		return selfShape.Value + ScoreWin
-	// Paper beats Rock
-	case opponentShape == Rock && selfShape == Paper:
-		return selfShape.Value + ScoreWin
-	default:
-		return selfShape.Value + ScoreLose
+// A, B, C = Rock, Paper, Scissors
+// X, Y, Z assumed to by Rock, Paper, Scissors
+// Score each round accordingly
+func part1(rounds [][2]byte) (total int) {
+	roundMap := map[byte]map[byte]int{
+		// Opponent plays Rock
+		'A': {
+			'X': ShapeRock + ScoreDraw,
+			'Y': ShapePaper + ScoreWin,
+			'Z': ShapeScissors + ScoreLose,
+		},
+		// Opponent plays Paper
+		'B': {
+			'X': ShapeRock + ScoreLose,
+			'Y': ShapePaper + ScoreDraw,
+			'Z': ShapeScissors + ScoreWin,
+		},
+		// Opponent plays Scissors
+		'C': {
+			'X': ShapeRock + ScoreWin,
+			'Y': ShapePaper + ScoreLose,
+			'Z': ShapeScissors + ScoreDraw,
+		},
 	}
+
+	for _, round := range rounds {
+		score := roundMap[round[0]][round[1]]
+		total += score
+	}
+
+	return
+}
+
+// A, B, C = Rock, Paper, Scissors
+// X, Y, Z = Lose, Draw, Win
+// Score each round accordingly
+func part2(rounds [][2]byte) (total int) {
+	roundMap := map[byte]map[byte]int{
+		// Opponent plays Rock
+		'A': {
+			'X': ShapeScissors + ScoreLose,
+			'Y': ShapeRock + ScoreDraw,
+			'Z': ShapePaper + ScoreWin,
+		},
+		// Opponent plays Paper
+		'B': {
+			'X': ShapeRock + ScoreLose,
+			'Y': ShapePaper + ScoreDraw,
+			'Z': ShapeScissors + ScoreWin,
+		},
+		// Opponent plays Scissors
+		'C': {
+			'X': ShapePaper + ScoreLose,
+			'Y': ShapeScissors + ScoreDraw,
+			'Z': ShapeRock + ScoreWin,
+		},
+	}
+
+	for _, round := range rounds {
+		score := roundMap[round[0]][round[1]]
+		total += score
+	}
+
+	return
 }
 
 func main() {
@@ -56,21 +89,6 @@ func main() {
 		rounds = append(rounds, [2]byte{line[0], line[2]})
 	}
 
-	part1 := Strategy{
-		Map: map[byte]Shape{
-			'A': Rock,
-			'B': Paper,
-			'C': Scissors,
-			'X': Rock,
-			'Y': Paper,
-			'Z': Scissors,
-		},
-	}
-	part1Total := 0
-	for _, round := range rounds {
-		outcome := part1.Outcome(round[0], round[1])
-		fmt.Printf("%s %s %d\n", string(round[0]), string(round[1]), outcome)
-		part1Total += outcome
-	}
-	fmt.Printf("Part1: %d\n", part1Total)
+	fmt.Printf("Part 1: %d\n", part1(rounds))
+	fmt.Printf("Part 2: %d\n", part2(rounds))
 }
