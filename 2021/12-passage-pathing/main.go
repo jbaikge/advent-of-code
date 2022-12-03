@@ -15,8 +15,9 @@ const Start = "start"
 const End = "end"
 
 type Cave struct {
-	Value     string
-	PathSoFar []string
+	Value       string
+	PathSoFar   []string
+	VistedTwice bool
 }
 
 func (c Cave) Seen(cave string) bool {
@@ -28,13 +29,7 @@ func (c Cave) Seen(cave string) bool {
 	return false
 }
 
-func part1(paths [][2]string) (count int) {
-	caves := make(map[string][]string)
-	for _, path := range paths {
-		caves[path[0]] = append(caves[path[0]], path[1])
-		caves[path[1]] = append(caves[path[1]], path[0])
-	}
-
+func part1(caves map[string][]string) (count int) {
 	start := Cave{
 		Value:     Start,
 		PathSoFar: []string{Start},
@@ -67,7 +62,46 @@ func part1(paths [][2]string) (count int) {
 	return
 }
 
-func part2(paths [][2]string) (n int) {
+func part2(caves map[string][]string) (count int) {
+	startEnd := Cave{
+		PathSoFar: []string{Start, End},
+	}
+	start := Cave{
+		Value:     Start,
+		PathSoFar: []string{Start},
+	}
+	queue := []Cave{start}
+	var current Cave
+	for len(queue) > 0 {
+		current, queue = queue[0], queue[1:]
+		if current.Value == End {
+			count++
+			continue
+		}
+		for _, next := range caves[current.Value] {
+			seen := current.Seen(next)
+			if !seen {
+				path := make([]string, 0, len(current.PathSoFar))
+				path = append(path, current.PathSoFar...)
+				if strings.ToLower(next) == next {
+					path = append(path, next)
+				}
+				queue = append(queue, Cave{
+					Value:       next,
+					PathSoFar:   path,
+					VistedTwice: current.VistedTwice,
+				})
+				continue
+			}
+			if seen && !current.VistedTwice && !startEnd.Seen(next) {
+				queue = append(queue, Cave{
+					Value:       next,
+					PathSoFar:   current.PathSoFar,
+					VistedTwice: true,
+				})
+			}
+		}
+	}
 	return
 }
 
@@ -84,6 +118,12 @@ func main() {
 		paths = append(paths, [2]string{parts[0], parts[1]})
 	}
 
-	fmt.Printf("Part 1: %d\n", part1(paths))
-	fmt.Printf("Part 2: %d\n", part2(paths))
+	caves := make(map[string][]string)
+	for _, path := range paths {
+		caves[path[0]] = append(caves[path[0]], path[1])
+		caves[path[1]] = append(caves[path[1]], path[0])
+	}
+
+	fmt.Printf("Part 1: %d\n", part1(caves))
+	fmt.Printf("Part 2: %d\n", part2(caves))
 }
