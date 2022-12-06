@@ -2,184 +2,141 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 )
 
-type Axis string
-
 const (
-	X Axis = "x"
-	Y Axis = "y"
+	XAxis = 'x'
+	YAxis = 'y'
 )
 
 type Fold struct {
-	Axis  Axis
+	Axis  byte
 	Value int
 }
 
-func dimensions(coords [][2]int) (width, height int) {
-	for _, coord := range coords {
-		if coord[0] > width {
-			width = coord[0]
+type Grid struct {
+	Points map[[2]int]bool
+	Folds  []Fold
+}
+
+func NewGrid() *Grid {
+	return &Grid{
+		Points: make(map[[2]int]bool),
+		Folds:  make([]Fold, 0, 10),
+	}
+}
+
+func (g *Grid) AddFold(axis byte, value int) {
+	g.Folds = append(g.Folds, Fold{
+		Axis:  axis,
+		Value: value,
+	})
+}
+
+func (src *Grid) Copy() (dst *Grid) {
+	dst = &Grid{
+		Points: make(map[[2]int]bool),
+		Folds:  make([]Fold, len(src.Folds)),
+	}
+	copy(dst.Folds, src.Folds)
+	for k, v := range src.Points {
+		dst.Points[k] = v
+	}
+	return
+}
+
+func (g *Grid) SetPoint(x, y int) {
+	g.Points[[2]int{x, y}] = true
+}
+
+func (g Grid) Size() (width, height int) {
+	for coords := range g.Points {
+		if coords[0] > width {
+			width = coords[0]
 		}
-		if coord[1] > height {
-			height = coord[1]
+		if coords[1] > height {
+			height = coords[1]
 		}
 	}
-	// zero indexed coords means max x and y need one more
-	// to prevent index out of range errors
 	width++
 	height++
 	return
 }
 
-func printGrid(grid [][]bool) {
-	lines := make([]string, len(grid[0]))
-	for x := range grid {
-		for y := range grid[x] {
-			ch := "."
-			if grid[x][y] {
-				ch = "#"
-			}
-			lines[y] += ch
-		}
+func (g *Grid) Fold(times int) {
+	if times == -1 {
+		times = len(g.Folds)
 	}
-	fmt.Println(strings.Join(lines, "\n"))
-}
-
-func count(grid [][]bool) (total int) {
-	for _, col := range grid {
-		for _, dot := range col {
-			if dot {
-				total++
+	for _, fold := range g.Folds[:times] {
+		for point := range g.Points {
+			if fold.Axis == XAxis && point[0] > fold.Value {
+				delete(g.Points, point)
+				g.Points[[2]int{fold.Value*2 - point[0], point[1]}] = true
+			}
+			if fold.Axis == YAxis && point[1] > fold.Value {
+				delete(g.Points, point)
+				g.Points[[2]int{point[0], fold.Value*2 - point[1]}] = true
 			}
 		}
 	}
-	return
 }
 
-func foldLeft(grid [][]bool, along int) (folded [][]bool) {
-	width, height := along, len(grid[0])
-	gridWidth := len(grid)
-	folded = make([][]bool, width)
-	for i := range folded {
-		folded[i] = make([]bool, height)
-	}
-
-	for y := 0; y < height; y++ {
-		// Copy existing dots
-		for x := 0; x < width; x++ {
-			folded[x][y] = grid[x][y]
-		}
-		// Transfer dots from fold
-		for x := gridWidth - 1; x > width; x-- {
-			newX := gridWidth - x - 1
-			folded[newX][y] = folded[newX][y] || grid[x][y]
-		}
-	}
-	return
-}
-
-func foldUp(grid [][]bool, along int) (folded [][]bool) {
-	width, height := len(grid), along
-	gridHeight := len(grid[0])
-	folded = make([][]bool, width)
-	for i := range folded {
-		folded[i] = make([]bool, height)
-	}
-	for x := 0; x < width; x++ {
-		// Copy existing dots
-		for y := 0; y < height; y++ {
-			folded[x][y] = grid[x][y]
-		}
-		// Transfer dots from fold
-		for y := gridHeight - 1; y > height; y-- {
-			newY := gridHeight - y - 1
-			folded[x][newY] = folded[x][newY] || grid[x][y]
-		}
-	}
-	return
-}
-
-func part1(coords [][2]int, folds []Fold) (n int) {
-	width, height := dimensions(coords)
-	grid := make([][]bool, width)
+func (g Grid) String() (s string) {
+	width, height := g.Size()
+	grid := make([][]byte, height)
 	for i := range grid {
-		grid[i] = make([]bool, height)
+		grid[i] = bytes.Repeat([]byte{'.'}, width)
 	}
-	for _, coord := range coords {
-		grid[coord[0]][coord[1]] = true
+	for coords, active := range g.Points {
+		// 	s += fmt.Sprintf("(%3d, %3d)\n", coords[0], coords[1])
+		var ch byte = '#'
+		if !active {
+			ch = '%'
+		}
+		grid[coords[1]][coords[0]] = ch
 	}
-	fold := folds[0]
-	if fold.Axis == Y {
-		grid = foldUp(grid, fold.Value)
-	} else {
-		grid = foldLeft(grid, fold.Value)
+	for _, row := range grid {
+		s += string(row) + "\n"
 	}
-	return count(grid)
+	return
 }
 
-func part2(coords [][2]int, folds []Fold) (n int) {
-	width, height := dimensions(coords)
-	grid := make([][]bool, width)
-	for i := range grid {
-		grid[i] = make([]bool, height)
-	}
-	for _, coord := range coords {
-		grid[coord[0]][coord[1]] = true
-	}
-	for _, fold := range folds {
-		if fold.Axis == Y {
-			grid = foldUp(grid, fold.Value)
-		} else {
-			grid = foldLeft(grid, fold.Value)
-		}
-	}
-	printGrid(grid)
-	return count(grid)
+func part1(grid *Grid) (count int) {
+	grid.Fold(1)
+	return len(grid.Points)
+}
+
+func part2(grid *Grid) string {
+	grid.Fold(-1)
+	return grid.String()
 }
 
 func main() {
-	coords := make([][2]int, 0, 1000)
-	folds := make([]Fold, 0, 10)
+	grid := NewGrid()
+
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
-		// Blank line separates coordinates from folds
-		if line == "" {
+		if strings.ContainsRune(line, ',') {
+			coords := strings.SplitN(line, ",", 2)
+			x, _ := strconv.Atoi(coords[0])
+			y, _ := strconv.Atoi(coords[1])
+			grid.SetPoint(x, y)
 			continue
 		}
-		// Parse fold directives
 		if strings.HasPrefix(line, "fold") {
 			fields := strings.Fields(line)
-			def := strings.SplitN(fields[2], "=", 2)
-			v, err := strconv.Atoi(def[1])
-			if err != nil {
-				log.Fatalf("could not convert %s to int: %v", def[1], err)
-			}
-			folds = append(folds, Fold{
-				Axis:  Axis(def[0]),
-				Value: v,
-			})
-			continue
+			parts := strings.SplitN(fields[2], "=", 2)
+			value, _ := strconv.Atoi(parts[1])
+			grid.AddFold(parts[0][0], value)
 		}
-		// Parse coordinates
-		coord := strings.SplitN(line, ",", 2)
-		x, err := strconv.Atoi(coord[0])
-		if err != nil {
-			log.Fatalf("could not convert %s to int: %v", coord[0], err)
-		}
-		y, err := strconv.Atoi(coord[1])
-		if err != nil {
-			log.Fatalf("could not convert %s to int: %v", coord[1], err)
-		}
-		coords = append(coords, [2]int{x, y})
 	}
 
-	fmt.Printf("Part 1: %d\n", part1(coords, folds))
-	fmt.Printf("Part 2: %d\n", part2(coords, folds))
+	fmt.Printf("Part 1: %d\n", part1(grid.Copy()))
+	fmt.Printf("Part 2:\n%s\n", part2(grid.Copy()))
 }
