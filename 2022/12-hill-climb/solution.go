@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/jbaikge/advent-of-code/util"
 )
@@ -50,19 +51,164 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 }
 
 func (s Solution) Part1(w io.Writer) (err error) {
-	var start Point
+	var start, end Point
+	grid := make(map[Point]Node)
 	for point, height := range s.HeightMap {
 		if height == CurrentPosition {
 			start = point
 		}
+		if height == BestSignalPosition {
+			end = point
+		}
+		grid[point] = Node{Point: point, Height: height}
 	}
-	visited := make(map[Point]bool)
-	steps := dfs(s.HeightMap, visited, start, start)
-	fmt.Fprintf(w, "Part 1: %d\n", steps)
+
+	search := &AStar{
+		Grid:  grid,
+		Start: Node{Point: start, Height: CurrentPosition},
+		Goal:  Node{Point: end, Height: BestSignalPosition},
+	}
+	path := search.Path()
+	for _, node := range path {
+		fmt.Fprintln(w, node)
+	}
+	fmt.Fprintf(w, "Part 1: %d\n", len(path)-1)
 	return
 }
 
 func (s Solution) Part2(w io.Writer) (err error) {
+	return
+}
+
+type Node struct {
+	Point  Point
+	Height byte
+}
+
+func (n Node) String() string {
+	return fmt.Sprintf("%s %s", n.Point.String(), string(n.Height))
+}
+
+// Adapted from pseudocode found on Wikipedia
+// Ref: https://en.wikipedia.org/wiki/A*_search_algorithm
+type AStar struct {
+	Grid  map[Point]Node
+	Start Node
+	Goal  Node
+}
+
+func (a *AStar) Cost(n Node) (cost int) {
+	x := a.Start.Point.X - a.Goal.Point.X
+	if x < 0 {
+		x *= -1
+	}
+
+	y := a.Start.Point.Y - a.Goal.Point.Y
+	if y < 0 {
+		y *= -1
+	}
+
+	return x + y
+}
+
+func (a *AStar) Path() (path []Node) {
+	open := []Node{a.Start}
+	from := make(map[Node]Node)
+	gScore := map[Node]int{a.Start: 0}
+	fScore := map[Node]int{a.Start: a.Cost(a.Start)}
+
+	for len(open) > 0 {
+		// Determine current node, or the node in open with the lowest fScore
+		var current Node
+		var currentIdx int
+		minScore := math.MaxInt
+		for i, node := range open {
+			if score := fScore[node]; score < minScore {
+				minScore = score
+				current = node
+				currentIdx = i
+			}
+		}
+
+		if current == a.Goal {
+			fmt.Println("Found the goal!")
+			return a.Reconstruct(from, current)
+		}
+
+		// Remove node from open
+		open = append(open[:currentIdx], open[currentIdx+1:]...)
+
+		points := []Point{
+			{current.Point.X, current.Point.Y + 1},
+			{current.Point.X + 1, current.Point.Y},
+			{current.Point.X, current.Point.Y - 1},
+			{current.Point.X - 1, current.Point.Y},
+		}
+		for _, point := range points {
+			neighbor, found := a.Grid[point]
+			if !found {
+				continue
+			}
+
+			valid := false
+			if current == a.Start {
+				valid = true
+			}
+			if current.Height == neighbor.Height {
+				valid = true
+			}
+			if current.Height+1 == neighbor.Height {
+				fmt.Println(current, "->", neighbor)
+				valid = true
+			}
+			if current.Height == 'z' && neighbor.Height == a.Goal.Height {
+				valid = true
+			}
+			if !valid {
+				continue
+			}
+
+			tentativeGScore := gScore[current] + 1
+			neighborGScore, found := gScore[neighbor]
+			if !found {
+				neighborGScore = math.MaxInt
+			}
+			if tentativeGScore < neighborGScore {
+				from[neighbor] = current
+				gScore[neighbor] = tentativeGScore
+				fScore[neighbor] = tentativeGScore + a.Cost(neighbor)
+
+				// "if neighbor not in open, open.add(neighbor)"
+				openFound := false
+				for _, node := range open {
+					if node == neighbor {
+						openFound = true
+					}
+				}
+				if !openFound {
+					// fmt.Println("Appending", neighbor)
+					open = append(open, neighbor)
+				}
+			} else {
+				fmt.Println(neighbor, tentativeGScore, "<=", neighborGScore)
+			}
+		}
+	}
+
+	return
+}
+
+func (a *AStar) Reconstruct(from map[Node]Node, current Node) (path []Node) {
+	path = make([]Node, 0, len(from)+1)
+	path = append(path, current)
+	for {
+		newNode, found := from[current]
+		if !found {
+			break
+		}
+		current = newNode
+		path = append([]Node{current}, path...)
+	}
 	return
 }
 
