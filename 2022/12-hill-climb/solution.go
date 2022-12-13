@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
+	"sync"
 
 	"github.com/jbaikge/advent-of-code/util"
 )
@@ -68,15 +70,58 @@ func (s Solution) Part1(w io.Writer) (err error) {
 		Start: Node{Point: start, Height: CurrentPosition},
 		Goal:  Node{Point: end, Height: BestSignalPosition},
 	}
-	path := search.Path()
-	for _, node := range path {
-		fmt.Fprintln(w, node)
-	}
+	path := search.Path(search.Start)
+	// for _, node := range path {
+	// 	fmt.Fprintln(w, node)
+	// }
 	fmt.Fprintf(w, "Part 1: %d\n", len(path)-1)
 	return
 }
 
 func (s Solution) Part2(w io.Writer) (err error) {
+	var end Point
+	startNodes := make([]Node, 0, 1000)
+	grid := make(map[Point]Node)
+	for point, height := range s.HeightMap {
+		if height == BestSignalPosition {
+			end = point
+		}
+		if height == 'a' {
+			startNodes = append(startNodes, Node{Point: point, Height: height})
+		}
+		grid[point] = Node{Point: point, Height: height}
+	}
+
+	search := &AStar{
+		Grid: grid,
+		Goal: Node{Point: end, Height: BestSignalPosition},
+	}
+
+	ch := make(chan int, len(startNodes))
+	var wg sync.WaitGroup
+	wg.Add(len(startNodes))
+	for _, node := range startNodes {
+		go func(node Node) {
+			path := search.Path(node)
+			wg.Done()
+			length := len(path)
+			if length == 0 {
+				return
+			}
+			ch <- length - 1
+		}(node)
+	}
+
+	wg.Wait()
+	close(ch)
+
+	lengths := make([]int, 0, len(startNodes))
+	for length := range ch {
+		lengths = append(lengths, length)
+	}
+
+	sort.Ints(lengths)
+	fmt.Fprintf(w, "Part 2: %v\n", lengths[0])
 	return
 }
 
@@ -103,11 +148,11 @@ func (a *AStar) Cost(n Node) (cost float64) {
 	return math.Sqrt(float64(x*x + y*y))
 }
 
-func (a *AStar) Path() (path []Node) {
-	open := []Node{a.Start}
+func (a *AStar) Path(startNode Node) (path []Node) {
+	open := []Node{startNode}
 	from := make(map[Node]Node)
-	gScore := map[Node]int{a.Start: 0}
-	fScore := map[Node]float64{a.Start: a.Cost(a.Start)}
+	gScore := map[Node]int{startNode: 0}
+	fScore := map[Node]float64{startNode: a.Cost(startNode)}
 
 	for len(open) > 0 {
 		// Determine current node, or the node in open with the lowest fScore
@@ -123,7 +168,7 @@ func (a *AStar) Path() (path []Node) {
 		}
 
 		if current == a.Goal {
-			fmt.Println("Found the goal!")
+			// fmt.Println("Found the goal!")
 			return a.Reconstruct(from, current)
 		}
 
@@ -143,7 +188,7 @@ func (a *AStar) Path() (path []Node) {
 			}
 
 			valid := false
-			if current == a.Start {
+			if current.Height == CurrentPosition {
 				valid = true
 			}
 			if current.Height > neighbor.Height {
