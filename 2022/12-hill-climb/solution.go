@@ -24,7 +24,7 @@ type Point struct {
 }
 
 func (p Point) String() string {
-	return fmt.Sprintf("(%d, %d)", p.X, p.Y)
+	return fmt.Sprintf("(%2d, %2d)", p.X, p.Y)
 }
 
 var _ util.Solution = new(Solution)
@@ -97,31 +97,23 @@ type AStar struct {
 	Goal  Node
 }
 
-func (a *AStar) Cost(n Node) (cost int) {
-	x := a.Start.Point.X - a.Goal.Point.X
-	if x < 0 {
-		x *= -1
-	}
-
-	y := a.Start.Point.Y - a.Goal.Point.Y
-	if y < 0 {
-		y *= -1
-	}
-
-	return x + y
+func (a *AStar) Cost(n Node) (cost float64) {
+	x := n.Point.X - a.Goal.Point.X
+	y := n.Point.Y - a.Goal.Point.Y
+	return math.Sqrt(float64(x*x + y*y))
 }
 
 func (a *AStar) Path() (path []Node) {
 	open := []Node{a.Start}
 	from := make(map[Node]Node)
 	gScore := map[Node]int{a.Start: 0}
-	fScore := map[Node]int{a.Start: a.Cost(a.Start)}
+	fScore := map[Node]float64{a.Start: a.Cost(a.Start)}
 
 	for len(open) > 0 {
 		// Determine current node, or the node in open with the lowest fScore
 		var current Node
 		var currentIdx int
-		minScore := math.MaxInt
+		minScore := math.MaxFloat64
 		for i, node := range open {
 			if score := fScore[node]; score < minScore {
 				minScore = score
@@ -154,11 +146,13 @@ func (a *AStar) Path() (path []Node) {
 			if current == a.Start {
 				valid = true
 			}
+			if current.Height > neighbor.Height {
+				valid = true
+			}
 			if current.Height == neighbor.Height {
 				valid = true
 			}
 			if current.Height+1 == neighbor.Height {
-				fmt.Println(current, "->", neighbor)
 				valid = true
 			}
 			if current.Height == 'z' && neighbor.Height == a.Goal.Height {
@@ -176,7 +170,7 @@ func (a *AStar) Path() (path []Node) {
 			if tentativeGScore < neighborGScore {
 				from[neighbor] = current
 				gScore[neighbor] = tentativeGScore
-				fScore[neighbor] = tentativeGScore + a.Cost(neighbor)
+				fScore[neighbor] = float64(tentativeGScore) + a.Cost(neighbor)
 
 				// "if neighbor not in open, open.add(neighbor)"
 				openFound := false
@@ -186,11 +180,8 @@ func (a *AStar) Path() (path []Node) {
 					}
 				}
 				if !openFound {
-					// fmt.Println("Appending", neighbor)
 					open = append(open, neighbor)
 				}
-			} else {
-				fmt.Println(neighbor, tentativeGScore, "<=", neighborGScore)
 			}
 		}
 	}
@@ -209,49 +200,5 @@ func (a *AStar) Reconstruct(from map[Node]Node, current Node) (path []Node) {
 		current = newNode
 		path = append([]Node{current}, path...)
 	}
-	return
-}
-
-func dfs(grid map[Point]byte, visited map[Point]bool, p Point, last Point) (steps int) {
-	// Does this point exist in the grid?
-	height, ok := grid[p]
-	if !ok {
-		return
-	}
-
-	// Have we visited here before?
-	if visited[p] {
-		// fmt.Printf("%s Already visited\n", p)
-		return
-	}
-
-	if height == BestSignalPosition {
-		fmt.Printf("%s %s\n", string(grid[last]), string(BestSignalPosition))
-	}
-
-	// New position is lower than current position
-	if height < grid[last] {
-		// fmt.Printf("%s %s < %s\n", p, string(height), string(grid[last]))
-		return
-	}
-
-	visited[p] = true
-
-	points := []Point{
-		{p.X, p.Y + 1},
-		{p.X + 1, p.Y},
-		{p.X, p.Y - 1},
-		{p.X - 1, p.Y},
-	}
-	for _, point := range points {
-		if height == CurrentPosition {
-			visited = map[Point]bool{}
-		}
-		steps = dfs(grid, visited, point, p)
-		if height == CurrentPosition {
-			fmt.Println(point, len(visited))
-		}
-	}
-
 	return
 }
