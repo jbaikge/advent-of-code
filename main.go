@@ -52,9 +52,11 @@ func main() {
 		r = bytes.NewReader(data)
 	}
 
+	parseStart := time.Now()
 	if err = solution.Parse(r); err != nil {
 		log.Fatalf("Unable to parse input: %v", err)
 	}
+	parseTook := time.Since(parseStart)
 
 	part1Start := time.Now()
 	if err = solution.Part1(os.Stdout); err != nil {
@@ -68,5 +70,5 @@ func main() {
 	}
 	part2Took := time.Since(part2Start)
 
-	fmt.Printf("\nPart 1 took %s; Part 2 took %s\n", part1Took, part2Took)
+	fmt.Printf("\nParse: %s Part 1: %s Part 2: %s\n", parseTook, part1Took, part2Took)
 }
