@@ -10,11 +10,13 @@ import (
 	"strconv"
 
 	hillclimb "github.com/jbaikge/advent-of-code/2022/12-hill-climb"
+	distress "github.com/jbaikge/advent-of-code/2022/13-distress"
 	"github.com/jbaikge/advent-of-code/util"
 )
 
 var solutions = map[int]util.Solution{
 	202212: new(hillclimb.Solution),
+	202213: new(distress.Solution),
 }
 
 func main() {
