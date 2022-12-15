@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 
@@ -36,13 +37,17 @@ type Sensor struct {
 	Beacon   Point
 }
 
-func (s Sensor) Distance() int {
-	x := s.Position.X - s.Beacon.X
+func (s Sensor) BeaconDistance() int {
+	return s.Distance(s.Beacon)
+}
+
+func (s Sensor) Distance(to Point) int {
+	x := s.Position.X - to.X
 	if x < 0 {
 		x *= -1
 	}
 
-	y := s.Position.Y - s.Beacon.Y
+	y := s.Position.Y - to.Y
 	if y < 0 {
 		y *= -1
 	}
@@ -92,7 +97,7 @@ func (s Solution) Part1(w io.Writer) (err error) {
 
 	points := make(map[int]bool)
 	for _, sensor := range s.Sensors {
-		dist := sensor.Distance()
+		dist := sensor.BeaconDistance()
 		y := sensor.Position.Y
 		fromAbove := y <= targetY && y+dist >= targetY
 		fromBelow := y >= targetY && y-dist <= targetY
@@ -119,5 +124,75 @@ func (s Solution) Part1(w io.Writer) (err error) {
 }
 
 func (s Solution) Part2(w io.Writer) (err error) {
+	// Calculate a box around all the sensor locations
+	var min, max Point
+	min.X, min.Y = math.MaxInt, math.MaxInt
+	// Cache beacon distances for the next part
+	beaconDistances := make([]int, len(s.Sensors))
+	for i, sensor := range s.Sensors {
+		x, y := sensor.Position.X, sensor.Position.Y
+		if x < min.X {
+			min.X = x
+		}
+		if x > max.X {
+			max.X = x
+		}
+		if y < min.Y {
+			min.Y = y
+		}
+		if y > max.Y {
+			max.Y = y
+		}
+
+		beaconDistances[i] = sensor.BeaconDistance()
+	}
+
+	// Walk 1 tile outside the perimeter of each sensor's scanning radius
+	// Then compare each point on the perimeter to the other sensors' scanning radius
+	// If a point does not fall in any radius, it is the location of the missing beacon
+	var found Point
+	for _, sensor := range s.Sensors {
+		beaconDistance := sensor.BeaconDistance()
+		perimeter := make([]Point, 0, beaconDistance*2)
+		// NE quadrant
+		for x, y := sensor.Position.X, sensor.Position.Y-beaconDistance-1; x <= sensor.Position.X+beaconDistance+1; x, y = x+1, y+1 {
+			perimeter = append(perimeter, Point{X: x, Y: y})
+		}
+		// SE quadrant
+		for x, y := sensor.Position.X, sensor.Position.Y+beaconDistance+1; x <= sensor.Position.X+beaconDistance+1; x, y = x+1, y-1 {
+			perimeter = append(perimeter, Point{X: x, Y: y})
+		}
+		// NW quadrant
+		for x, y := sensor.Position.X-beaconDistance-1, sensor.Position.Y; x <= sensor.Position.X; x, y = x+1, y-1 {
+			perimeter = append(perimeter, Point{X: x, Y: y})
+		}
+		// SW quadrant
+		for x, y := sensor.Position.X-beaconDistance-1, sensor.Position.Y; x <= sensor.Position.X; x, y = x+1, y+1 {
+			perimeter = append(perimeter, Point{X: x, Y: y})
+		}
+		// Walk around the outside and find out if any sensor
+		// radii overlap
+		for _, point := range perimeter {
+			if point.X < min.X || point.X > max.X || point.Y < min.Y || point.Y > max.Y {
+				continue
+			}
+			overlaps := false
+			for i, dist := range beaconDistances {
+				if s.Sensors[i].Distance(point) <= dist {
+					overlaps = true
+					break
+				}
+			}
+			if !overlaps {
+				found = point
+				break
+			}
+		}
+		if found.X != 0 && found.Y != 0 {
+			break
+		}
+	}
+
+	fmt.Fprintf(w, "Part 2: %d\n", found.X*4000000+found.Y)
 	return
 }
