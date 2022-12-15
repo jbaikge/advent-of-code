@@ -1,0 +1,57 @@
+#!/bin/sh
+
+YEAR="$1"
+DAY="$2"
+NAME="$3"
+
+if [ -z "$YEAR" ] || [ -z "$DAY" ] || [ -z "$NAME" ]; then
+    echo "$0 <YEAR> <DAY> <NAME>"
+    exit 1
+fi
+
+DIR="$YEAR/$DAY-$NAME"
+if [ -d "$DIR" ]; then
+    echo "Directory already exists: $DIR"
+    exit 1
+fi
+
+mkdir -p "$DIR"
+
+touch "$DIR/test.txt" "$DIR/input.txt"
+
+cat <<EOF > "$DIR/solution.go"
+package $NAME
+
+import (
+	"embed"
+    "fmt"
+	"io"
+
+	"github.com/jbaikge/advent-of-code/util"
+)
+
+//go:embed *.txt
+var Files embed.FS
+
+var _ util.Solution = new(Solution)
+
+type Solution struct{}
+
+func (s Solution) Files() embed.FS {
+	return Files
+}
+
+func (s *Solution) Parse(r io.Reader) (err error) {
+	return
+}
+
+func (s Solution) Part1(w io.Writer) (err error) {
+    fmt.Fprintf(w, "Part 1: %d\n", 0)
+	return
+}
+
+func (s Solution) Part2(w io.Writer) (err error) {
+    fmt.Fprintf(w, "Part 2: %d\n", 0)
+	return
+}
+EOF
