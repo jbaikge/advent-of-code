@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	chiton "github.com/jbaikge/advent-of-code/2021/15-chiton"
 	hillclimb "github.com/jbaikge/advent-of-code/2022/12-hill-climb"
 	distress "github.com/jbaikge/advent-of-code/2022/13-distress"
 	reservoir "github.com/jbaikge/advent-of-code/2022/14-reservoir"
@@ -18,6 +19,7 @@ import (
 )
 
 var solutions = map[int]util.Solution{
+	202115: new(chiton.Solution),
 	202212: new(hillclimb.Solution),
 	202213: new(distress.Solution),
 	202214: new(reservoir.Solution),
