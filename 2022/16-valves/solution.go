@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 
@@ -23,86 +22,54 @@ type Valve struct {
 	TunnelsTo []string
 }
 
-type AStar struct {
-	Map       map[string]Valve
-	Start     Valve
+func (v Valve) String() string {
+	return fmt.Sprintf("%s.%d", v.Name, v.FlowRate)
+}
+
+type Node struct {
+	Name string
+	Path []string
+}
+
+type BFS struct {
+	Graph     map[string]Valve
 	TimeLimit int
 }
 
-func (a *AStar) Cost(v Valve) int {
-	return v.FlowRate
-}
+func (b BFS) Path(start, end string) (path []Valve) {
+	stack := make([]Node, 0, len(b.Graph))
+	stack = append(stack, Node{Name: start, Path: make([]string, 0, len(b.Graph))})
+	// neighbor -> current
+	visited := make(map[string]bool)
+	for len(stack) > 0 {
+		// Pull from beginning of stack
+		current := stack[0]
+		stack = stack[1:]
 
-func (a *AStar) Path() (path []Valve) {
-	startValve := a.Start
-	open := []Valve{startValve}
-	// Map of valve name to valve name
-	from := make(map[string]string)
-	gScore := map[string]int{startValve.Name: 0}
-	fScore := map[string]int{startValve.Name: a.Cost(startValve)}
-	// Only have a certain amount of time to complete the traversal
-	timeTaken := 0
+		// Don't revisit valves
+		if _, ok := visited[current.Name]; ok {
+			continue
+		}
+		visited[current.Name] = true
 
-	// Zero-Flow-Rate valves can be considered "already open" since no action
-	// will happen.
-	openValves := make(map[string]bool)
-	for _, valve := range a.Map {
-		openValves[valve.Name] = valve.FlowRate > 0
-	}
+		// Append to the current node's path
+		current.Path = append(current.Path, current.Name)
 
-	var current Valve
-	for timeTaken < a.TimeLimit && len(open) > 0 {
-		var currentIdx int
-		minScore := math.MaxInt
-		for i, valve := range open {
-			if score := fScore[valve.Name]; score < minScore {
-				minScore = score
-				current = valve
-				currentIdx = i
+		// Convert the path to Valves when we reach the target valve
+		if current.Name == end {
+			path = make([]Valve, 0, len(current.Path))
+			for _, name := range current.Path {
+				path = append(path, b.Graph[name])
 			}
+			return
 		}
 
-		open = append(open[:currentIdx], open[currentIdx+1:]...)
-
-		timeTaken++
-		if openValves[current.Name] {
-			timeTaken++
-			openValves[current.Name] = false
+		// Generate new nodes for adjacent valves
+		for _, to := range b.Graph[current.Name].TunnelsTo {
+			node := Node{Name: to, Path: make([]string, len(current.Path))}
+			copy(node.Path, current.Path)
+			stack = append(stack, node)
 		}
-
-		for _, tunnel := range current.TunnelsTo {
-			tentativeGScore := gScore[current.Name] + 1
-			tunnelGScore, found := gScore[tunnel]
-			if !found {
-				tunnelGScore = math.MaxInt
-			}
-			fmt.Printf("%d < %d\n", tentativeGScore, tunnelGScore)
-			if tentativeGScore < tunnelGScore {
-				from[tunnel] = current.Name
-				gScore[tunnel] = tentativeGScore
-				fScore[tunnel] = tentativeGScore + a.Cost(a.Map[tunnel])
-
-				// Explore all the sub-tunnels
-				for _, subTunnel := range a.Map[tunnel].TunnelsTo {
-					open = append(open, a.Map[subTunnel])
-				}
-			}
-		}
-	}
-
-	return a.Reconstruct(from, current)
-}
-
-func (a *AStar) Reconstruct(from map[string]string, current Valve) (path []Valve) {
-	path = make([]Valve, 0, len(from)+1)
-	path = append(path, current)
-	for {
-		newName, found := from[current.Name]
-		if !found {
-			break
-		}
-		current = a.Map[newName]
-		path = append([]Valve{current}, path...)
 	}
 	return
 }
@@ -139,18 +106,48 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 
 func (s Solution) Part1(w io.Writer) (err error) {
 	valveMap := make(map[string]Valve)
+	pressurized := make([]string, 0, len(valveMap))
 	for _, valve := range s.Valves {
 		valveMap[valve.Name] = valve
+		if valve.FlowRate > 0 {
+			pressurized = append(pressurized, valve.Name)
+		}
 	}
 
-	aStar := &AStar{
-		Map:       valveMap,
-		Start:     s.Valves[0],
+	bfs := &BFS{
+		Graph:     valveMap,
 		TimeLimit: 30,
 	}
-	path := aStar.Path()
+	startNode := "AA"
+	timeLimit := 30
+	timeTaken := 0
+	for len(pressurized) > 0 && timeTaken <= 30 {
+		fmt.Printf("Pressurized: %d; Time Taken: %d\n", len(pressurized), timeTaken)
+		var idx int
+		minLength := len(s.Valves)
+		paths := make(map[int][]Valve)
+		for i, end := range pressurized {
+			fmt.Printf("  %s -> %s\n", startNode, end)
+			newPath := bfs.Path(startNode, end)
 
-	fmt.Printf("%+v\n", path)
+			score := (timeLimit - timeTaken - len(newPath) - 1) * newPath[len(newPath)-1].FlowRate
+			fmt.Printf("    %3d %v\n", score, newPath)
+
+			if length := len(newPath); length < minLength {
+				minLength = length
+			}
+
+			path, found := paths[len(newPath)]
+			if !found || path[len(path)-1].FlowRate < newPath[len(newPath)-1].FlowRate {
+				paths[len(newPath)] = newPath
+				if len(newPath) == minLength {
+					idx = i
+				}
+			}
+		}
+		startNode = pressurized[idx]
+		pressurized = append(pressurized[:idx], pressurized[idx+1:]...)
+	}
 
 	fmt.Fprintf(w, "Part 1: %d\n", 0)
 	return
