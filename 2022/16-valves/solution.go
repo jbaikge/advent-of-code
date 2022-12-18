@@ -31,46 +31,101 @@ type Node struct {
 	Path []string
 }
 
-type BFS struct {
-	Graph     map[string]Valve
-	TimeLimit int
+type Search struct {
+	Graph map[string]Valve
 }
 
-func (b BFS) Path(start, end string) (path []Valve) {
-	stack := make([]Node, 0, len(b.Graph))
-	stack = append(stack, Node{Name: start, Path: make([]string, 0, len(b.Graph))})
-	// neighbor -> current
+func (s Search) Path(start, goal string) (path []Valve) {
+	stack := make([]Node, 0, len(s.Graph))
+	stack = append(stack, Node{Name: start, Path: make([]string, 0, len(s.Graph))})
+
 	visited := make(map[string]bool)
 	for len(stack) > 0 {
-		// Pull from beginning of stack
 		current := stack[0]
 		stack = stack[1:]
 
-		// Don't revisit valves
-		if _, ok := visited[current.Name]; ok {
-			continue
-		}
-		visited[current.Name] = true
-
-		// Append to the current node's path
-		current.Path = append(current.Path, current.Name)
-
-		// Convert the path to Valves when we reach the target valve
-		if current.Name == end {
+		if current.Name == goal {
 			path = make([]Valve, 0, len(current.Path))
 			for _, name := range current.Path {
-				path = append(path, b.Graph[name])
+				path = append(path, s.Graph[name])
 			}
 			return
 		}
 
-		// Generate new nodes for adjacent valves
-		for _, to := range b.Graph[current.Name].TunnelsTo {
+		if _, found := visited[current.Name]; found {
+			continue
+		}
+		visited[current.Name] = true
+
+		current.Path = append(current.Path, current.Name)
+
+		for _, to := range s.Graph[current.Name].TunnelsTo {
 			node := Node{Name: to, Path: make([]string, len(current.Path))}
 			copy(node.Path, current.Path)
 			stack = append(stack, node)
 		}
 	}
+	return
+}
+
+type Route struct {
+	Open      []string
+	Closed    []string
+	TimeTaken int
+	Flow      int
+}
+
+func factorial(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	return n * factorial(n-1)
+}
+
+// Ref: https://en.wikipedia.org/wiki/Heap%27s_algorithm
+func permute(arr []string, ch chan []string) (permutations [][]string) {
+	n := len(arr)
+	permutations = make([][]string, 0)
+
+	// c is an encoding of the stack state
+	c := make([]int, n)
+
+	// Need to make a copy of the original array or it will get modified
+	a := make([]string, len(arr))
+	copy(a, arr)
+
+	first := make([]string, len(a))
+	copy(first, a)
+	// permutations = append(permutations, first)
+	ch <- first
+
+	i := 1
+	for i < n {
+		if c[i] < i {
+			if i%2 == 0 {
+				a[0], a[i] = a[i], a[0]
+			} else {
+				a[c[i]], a[i] = a[i], a[c[i]]
+			}
+
+			// Make a copy of the array to facilitate swapping elements
+			p := make([]string, len(a))
+			copy(p, a)
+
+			// permutations = append(permutations, p)
+			ch <- p
+			// Swap occurred, simulate increment of the loop counter
+			c[i]++
+			// Simulate recursive call
+			i = 1
+		} else {
+			// Reset the state and simulate popping the stack by incrementing
+			// the pointer
+			c[i] = 0
+			i++
+		}
+	}
+	close(ch)
 	return
 }
 
@@ -105,51 +160,85 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 }
 
 func (s Solution) Part1(w io.Writer) (err error) {
-	valveMap := make(map[string]Valve)
-	pressurized := make([]string, 0, len(valveMap))
+	const TimeLimit = 30
+
+	graph := make(map[string]Valve)
+	pressurized := make([]string, 0, len(s.Valves))
 	for _, valve := range s.Valves {
-		valveMap[valve.Name] = valve
+		graph[valve.Name] = valve
 		if valve.FlowRate > 0 {
 			pressurized = append(pressurized, valve.Name)
 		}
 	}
 
-	bfs := &BFS{
-		Graph:     valveMap,
-		TimeLimit: 30,
+	fmt.Printf("Pressurized: %d\n", len(pressurized))
+	fmt.Printf("%d!: %d\n", len(pressurized), factorial(len(pressurized)))
+
+	routes := make([]Route, 0, 1024)
+	search := Search{
+		Graph: graph,
 	}
-	startNode := "AA"
-	timeLimit := 30
-	timeTaken := 0
-	for len(pressurized) > 0 && timeTaken <= 30 {
-		fmt.Printf("Pressurized: %d; Time Taken: %d\n", len(pressurized), timeTaken)
-		var idx int
-		minLength := len(s.Valves)
-		paths := make(map[int][]Valve)
-		for i, end := range pressurized {
-			fmt.Printf("  %s -> %s\n", startNode, end)
-			newPath := bfs.Path(startNode, end)
 
-			score := (timeLimit - timeTaken - len(newPath) - 1) * newPath[len(newPath)-1].FlowRate
-			fmt.Printf("    %3d %v\n", score, newPath)
-
-			if length := len(newPath); length < minLength {
-				minLength = length
+	// Initial routes from AA
+	for _, name := range pressurized {
+		valve := graph[name]
+		path := search.Path("AA", name)
+		timeTaken := len(path) + 1
+		route := Route{
+			Open:      make([]string, 0, len(pressurized)-1),
+			Closed:    []string{name},
+			TimeTaken: timeTaken,
+			Flow:      (TimeLimit - timeTaken) * valve.FlowRate,
+		}
+		for _, open := range pressurized {
+			if open == name {
+				continue
 			}
+			route.Open = append(route.Open, open)
+		}
+		routes = append(routes, route)
+	}
 
-			path, found := paths[len(newPath)]
-			if !found || path[len(path)-1].FlowRate < newPath[len(newPath)-1].FlowRate {
-				paths[len(newPath)] = newPath
-				if len(newPath) == minLength {
-					idx = i
+	var bestRoute Route
+
+	stack := make([]Route, 0, 1024)
+	stack = append(stack, routes...)
+	for len(stack) > 0 {
+		current := stack[0]
+		stack = stack[1:]
+
+		start := current.Closed[len(current.Closed)-1]
+		for _, open := range current.Open {
+			path := search.Path(start, open)
+			timeTaken := current.TimeTaken + len(path) + 1
+			route := Route{
+				Open: make([]string, 0, len(current.Open)-1),
+				// Closed:    append(current.Closed, open),
+				Closed:    make([]string, 0, len(current.Closed)+1),
+				TimeTaken: timeTaken,
+				Flow:      current.Flow + (TimeLimit-timeTaken)*graph[open].FlowRate,
+			}
+			for _, name := range current.Open {
+				if name == open {
+					continue
+				}
+				route.Open = append(route.Open, name)
+			}
+			route.Closed = append(route.Closed, current.Closed...)
+			route.Closed = append(route.Closed, open)
+
+			if route.TimeTaken < TimeLimit {
+				if route.Flow > bestRoute.Flow {
+					bestRoute = route
+				}
+				if len(route.Open) > 0 {
+					stack = append(stack, route)
 				}
 			}
 		}
-		startNode = pressurized[idx]
-		pressurized = append(pressurized[:idx], pressurized[idx+1:]...)
 	}
 
-	fmt.Fprintf(w, "Part 1: %d\n", 0)
+	fmt.Fprintf(w, "Part 1: %d\n", bestRoute.Flow)
 	return
 }
 
