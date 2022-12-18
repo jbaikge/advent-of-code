@@ -75,60 +75,6 @@ type Route struct {
 	Flow      int
 }
 
-func factorial(n int) int {
-	if n <= 1 {
-		return 1
-	}
-	return n * factorial(n-1)
-}
-
-// Ref: https://en.wikipedia.org/wiki/Heap%27s_algorithm
-func permute(arr []string, ch chan []string) (permutations [][]string) {
-	n := len(arr)
-	permutations = make([][]string, 0)
-
-	// c is an encoding of the stack state
-	c := make([]int, n)
-
-	// Need to make a copy of the original array or it will get modified
-	a := make([]string, len(arr))
-	copy(a, arr)
-
-	first := make([]string, len(a))
-	copy(first, a)
-	// permutations = append(permutations, first)
-	ch <- first
-
-	i := 1
-	for i < n {
-		if c[i] < i {
-			if i%2 == 0 {
-				a[0], a[i] = a[i], a[0]
-			} else {
-				a[c[i]], a[i] = a[i], a[c[i]]
-			}
-
-			// Make a copy of the array to facilitate swapping elements
-			p := make([]string, len(a))
-			copy(p, a)
-
-			// permutations = append(permutations, p)
-			ch <- p
-			// Swap occurred, simulate increment of the loop counter
-			c[i]++
-			// Simulate recursive call
-			i = 1
-		} else {
-			// Reset the state and simulate popping the stack by incrementing
-			// the pointer
-			c[i] = 0
-			i++
-		}
-	}
-	close(ch)
-	return
-}
-
 type Solution struct {
 	Valves []Valve
 }
@@ -170,9 +116,6 @@ func (s Solution) Part1(w io.Writer) (err error) {
 			pressurized = append(pressurized, valve.Name)
 		}
 	}
-
-	fmt.Printf("Pressurized: %d\n", len(pressurized))
-	fmt.Printf("%d!: %d\n", len(pressurized), factorial(len(pressurized)))
 
 	routes := make([]Route, 0, 1024)
 	search := Search{
