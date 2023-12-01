@@ -17,6 +17,7 @@ import (
 	sensors "github.com/jbaikge/advent-of-code/2022/15-sensors"
 	valves "github.com/jbaikge/advent-of-code/2022/16-valves"
 	tetris "github.com/jbaikge/advent-of-code/2022/17-tetris"
+	trebuchet "github.com/jbaikge/advent-of-code/2023/01-trebuchet"
 	"github.com/jbaikge/advent-of-code/util"
 )
 
@@ -28,6 +29,7 @@ var solutions = map[int]util.Solution{
 	202215: new(sensors.Solution),
 	202216: new(valves.Solution),
 	202217: new(tetris.Solution),
+	202301: new(trebuchet.Solution),
 }
 
 func main() {
