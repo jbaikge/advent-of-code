@@ -20,6 +20,7 @@ import (
 	trebuchet "github.com/jbaikge/advent-of-code/2023/01-trebuchet"
 	cubeconundrum "github.com/jbaikge/advent-of-code/2023/02-cube-conundrum"
 	gearratios "github.com/jbaikge/advent-of-code/2023/03-gear-ratios"
+	scratchcards "github.com/jbaikge/advent-of-code/2023/04-scratchcards"
 	"github.com/jbaikge/advent-of-code/util"
 )
 
@@ -34,6 +35,7 @@ var solutions = map[int]util.Solution{
 	202301: new(trebuchet.Solution),
 	202302: new(cubeconundrum.Solution),
 	202303: new(gearratios.Solution),
+	202304: new(scratchcards.Solution),
 }
 
 func main() {
