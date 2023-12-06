@@ -21,6 +21,7 @@ import (
 	cubeconundrum "github.com/jbaikge/advent-of-code/2023/02-cube-conundrum"
 	gearratios "github.com/jbaikge/advent-of-code/2023/03-gear-ratios"
 	scratchcards "github.com/jbaikge/advent-of-code/2023/04-scratchcards"
+	fertilizer "github.com/jbaikge/advent-of-code/2023/05-fertilizer"
 	"github.com/jbaikge/advent-of-code/util"
 )
 
@@ -36,6 +37,7 @@ var solutions = map[int]util.Solution{
 	202302: new(cubeconundrum.Solution),
 	202303: new(gearratios.Solution),
 	202304: new(scratchcards.Solution),
+	202305: new(fertilizer.Solution),
 }
 
 func main() {
