@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -31,9 +32,15 @@ func (r *Range) Append(b Bound) {
 	r.Bounds = append(r.Bounds, b)
 }
 
+func (r *Range) Sort() {
+	slices.SortFunc[[]Bound, Bound](r.Bounds, func(a, b Bound) int {
+		return a.Source - b.Source
+	})
+}
+
 func (r Range) Destination(source int) (destination int) {
 	for _, b := range r.Bounds {
-		if source >= b.Source && source <= b.Source+b.Length {
+		if source >= b.Source && source < b.Source+b.Length {
 			return b.Destination + (source - b.Source)
 		}
 	}
@@ -72,9 +79,32 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
+		// Sort target and add start and end bounds
+		if line == "" && target != nil {
+			target.Sort()
+
+			if target.Bounds[0].Source > 0 {
+				target.Bounds = append([]Bound{
+					{
+						Length: target.Bounds[0].Source,
+					},
+				}, target.Bounds...)
+			}
+
+			lastBound := target.Bounds[len(target.Bounds)-1]
+			lastSource := lastBound.Source + lastBound.Length
+			if lastSource < math.MaxUint32 {
+				target.Bounds = append(target.Bounds, Bound{
+					Source: lastSource,
+					Length: math.MaxUint32 - lastSource,
+				})
+			}
+
+			target = nil
+		}
+
 		// Skip blank lines
 		if line == "" {
-			target = nil
 			continue
 		}
 
@@ -134,14 +164,15 @@ func (s Solution) Part1(w io.Writer) (err error) {
 
 func (s Solution) Part2(w io.Writer) (err error) {
 	min := math.MaxInt
+
+	for _, b := range s.SeedToSoil.Bounds {
+		fmt.Printf("%d -> %d\n", b.Source, b.Source+b.Length-1)
+	}
+
 	for i := 0; i < len(s.Seeds); i += 2 {
-		fmt.Printf("%d: %d -> %d\n", i, s.Seeds[i], s.Seeds[i]+s.Seeds[i+1])
-		for j := s.Seeds[i]; j < s.Seeds[i]+s.Seeds[i+1]; j++ {
-			if loc := s.Location(j); loc < min {
-				fmt.Printf("New Min: %d\n", loc)
-				min = loc
-			}
-		}
+		seedLower, seedUpper := s.Seeds[i], s.Seeds[i]+s.Seeds[i+1]-1
+		fmt.Printf("%d: %d -> %d\n", i, seedLower, seedUpper)
+
 	}
 	fmt.Fprintf(w, "Part 2: %d\n", min)
 	return
