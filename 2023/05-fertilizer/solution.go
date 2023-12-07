@@ -34,7 +34,9 @@ func (r *Range) AddCaps() {
 	if r.Bounds[0].Source > 0 {
 		r.Bounds = append([]Bound{
 			{
-				Length: r.Bounds[0].Source,
+				Destination: 0,
+				Source:      0,
+				Length:      r.Bounds[0].Source,
 			},
 		}, r.Bounds...)
 	}
@@ -63,19 +65,17 @@ func (r *Range) Sort() {
 
 func (r Range) Destination(source int, length int) (destinations [][2]int) {
 	destinations = make([][2]int, 0, 16)
-	// fmt.Printf("Bounds: %v\n", r.Bounds)
 	for _, b := range r.Bounds {
 		if source < b.Source || source >= b.Source+b.Length {
-			// fmt.Printf("[%d, %d, %d]\n", source, b.Source, b.Source+b.Length)
 			continue
 		}
 
-		// fmt.Printf("%d > %d > %d: %d\n", b.Source, source, b.Source+b.Length, b.Destination)
 		dest := [2]int{b.Destination + (source - b.Source), length}
 
-		if source+length > b.Source+b.Length {
+		if source+length-1 > b.Source+b.Length {
 			dest[1] = b.Length - (source - b.Source)
 			source = b.Source + b.Length
+			length = length - dest[1]
 		}
 
 		destinations = append(destinations, dest)
@@ -223,11 +223,12 @@ func (s Solution) Part1(w io.Writer) (err error) {
 }
 
 // Too high: 225749547
+// Goal:     17729182
 func (s Solution) Part2(w io.Writer) (err error) {
 	min := math.MaxUint32
 	for i := 0; i < len(s.Seeds); i += 2 {
 		for _, loc := range s.Location(s.Seeds[i], s.Seeds[i+1]) {
-			if loc[0] < min && loc[0] > 0 {
+			if loc[0] < min {
 				min = loc[0]
 			}
 		}
