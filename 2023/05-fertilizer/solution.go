@@ -28,6 +28,29 @@ type Range struct {
 	Bounds []Bound
 }
 
+func (r *Range) AddCaps() {
+	r.Sort()
+
+	if r.Bounds[0].Source > 0 {
+		r.Bounds = append([]Bound{
+			{
+				Length: r.Bounds[0].Source,
+			},
+		}, r.Bounds...)
+	}
+
+	lastBound := r.Bounds[len(r.Bounds)-1]
+	lastSource := lastBound.Source + lastBound.Length
+	if lastSource < math.MaxUint32 {
+		r.Bounds = append(r.Bounds, Bound{
+			Destination: lastSource,
+			Source:      lastSource,
+			Length:      math.MaxUint32 - lastSource,
+		})
+	}
+
+}
+
 func (r *Range) Append(b Bound) {
 	r.Bounds = append(r.Bounds, b)
 }
@@ -38,13 +61,26 @@ func (r *Range) Sort() {
 	})
 }
 
-func (r Range) Destination(source int) (destination int) {
+func (r Range) Destination(source int, length int) (destinations [][2]int) {
+	destinations = make([][2]int, 0, 16)
+	// fmt.Printf("Bounds: %v\n", r.Bounds)
 	for _, b := range r.Bounds {
-		if source >= b.Source && source < b.Source+b.Length {
-			return b.Destination + (source - b.Source)
+		if source < b.Source || source >= b.Source+b.Length {
+			// fmt.Printf("[%d, %d, %d]\n", source, b.Source, b.Source+b.Length)
+			continue
 		}
+
+		// fmt.Printf("%d > %d > %d: %d\n", b.Source, source, b.Source+b.Length, b.Destination)
+		dest := [2]int{b.Destination + (source - b.Source), length}
+
+		if source+length > b.Source+b.Length {
+			dest[1] = b.Length - (source - b.Source)
+			source = b.Source + b.Length
+		}
+
+		destinations = append(destinations, dest)
 	}
-	return source
+	return
 }
 
 type Solution struct {
@@ -58,14 +94,47 @@ type Solution struct {
 	HumidityToLocation    Range
 }
 
-func (s Solution) Location(seed int) (loc int) {
-	soil := s.SeedToSoil.Destination(seed)
-	fert := s.SoilToFertilizer.Destination(soil)
-	water := s.FertilizerToWater.Destination(fert)
-	light := s.WaterToLight.Destination(water)
-	temp := s.LightToTemperature.Destination(light)
-	humid := s.TemperatureToHumidity.Destination(temp)
-	loc = s.HumidityToLocation.Destination(humid)
+func (s Solution) Location(seed int, length int) (locs [][2]int) {
+	soils := s.SeedToSoil.Destination(seed, length)
+	// fmt.Printf("Soils: %v\n", soils)
+
+	ferts := make([][2]int, 0, 32)
+	for _, soil := range soils {
+		ferts = append(ferts, s.SoilToFertilizer.Destination(soil[0], soil[1])...)
+	}
+	// fmt.Printf("Fers: %v\n", ferts)
+
+	waters := make([][2]int, 0, 32)
+	for _, fert := range ferts {
+		waters = append(waters, s.FertilizerToWater.Destination(fert[0], fert[1])...)
+	}
+	// fmt.Printf("Waters: %v\n", waters)
+
+	lights := make([][2]int, 0, 32)
+	for _, water := range waters {
+		lights = append(lights, s.WaterToLight.Destination(water[0], water[1])...)
+	}
+	// fmt.Printf("Lights: %v\n", lights)
+
+	temps := make([][2]int, 0, 32)
+	for _, light := range lights {
+		temps = append(temps, s.LightToTemperature.Destination(light[0], light[1])...)
+	}
+	// fmt.Printf("Temps: %v\n", temps)
+
+	humids := make([][2]int, 0, 32)
+	for _, temp := range temps {
+		humids = append(humids, s.TemperatureToHumidity.Destination(temp[0], temp[1])...)
+	}
+	// fmt.Printf("Humids: %v\n", humids)
+
+	locs = make([][2]int, 0, 32)
+	for _, humid := range humids {
+		locs = append(locs, s.HumidityToLocation.Destination(humid[0], humid[1])...)
+	}
+
+	fmt.Println(locs)
+	fmt.Println()
 	return
 }
 
@@ -79,28 +148,9 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Sort target and add start and end bounds
+		// Add bounds to beginning and end of range
 		if line == "" && target != nil {
-			target.Sort()
-
-			if target.Bounds[0].Source > 0 {
-				target.Bounds = append([]Bound{
-					{
-						Length: target.Bounds[0].Source,
-					},
-				}, target.Bounds...)
-			}
-
-			lastBound := target.Bounds[len(target.Bounds)-1]
-			lastSource := lastBound.Source + lastBound.Length
-			if lastSource < math.MaxUint32 {
-				target.Bounds = append(target.Bounds, Bound{
-					Source: lastSource,
-					Length: math.MaxUint32 - lastSource,
-				})
-			}
-
-			target = nil
+			target.AddCaps()
 		}
 
 		// Skip blank lines
@@ -148,31 +198,39 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 			target.Append(b)
 		}
 	}
+
+	// Need to add caps to final range
+	target.AddCaps()
+
+	for _, b := range s.SeedToSoil.Bounds {
+		fmt.Printf("%d -> %d\n", b.Source, b.Source+b.Length-1)
+	}
+
 	return
 }
 
 func (s Solution) Part1(w io.Writer) (err error) {
 	min := math.MaxInt
 	for _, seed := range s.Seeds {
-		if loc := s.Location(seed); loc < min {
-			min = loc
+		for _, loc := range s.Location(seed, 1) {
+			if loc[0] < min {
+				min = loc[0]
+			}
 		}
 	}
 	fmt.Fprintf(w, "Part 1: %d\n", min)
 	return
 }
 
+// Too high: 225749547
 func (s Solution) Part2(w io.Writer) (err error) {
-	min := math.MaxInt
-
-	for _, b := range s.SeedToSoil.Bounds {
-		fmt.Printf("%d -> %d\n", b.Source, b.Source+b.Length-1)
-	}
-
+	min := math.MaxUint32
 	for i := 0; i < len(s.Seeds); i += 2 {
-		seedLower, seedUpper := s.Seeds[i], s.Seeds[i]+s.Seeds[i+1]-1
-		fmt.Printf("%d: %d -> %d\n", i, seedLower, seedUpper)
-
+		for _, loc := range s.Location(s.Seeds[i], s.Seeds[i+1]) {
+			if loc[0] < min && loc[0] > 0 {
+				min = loc[0]
+			}
+		}
 	}
 	fmt.Fprintf(w, "Part 2: %d\n", min)
 	return
