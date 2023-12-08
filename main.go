@@ -22,6 +22,7 @@ import (
 	gearratios "github.com/jbaikge/advent-of-code/2023/03-gear-ratios"
 	scratchcards "github.com/jbaikge/advent-of-code/2023/04-scratchcards"
 	fertilizer "github.com/jbaikge/advent-of-code/2023/05-fertilizer"
+	waitforit "github.com/jbaikge/advent-of-code/2023/06-wait-for-it"
 	"github.com/jbaikge/advent-of-code/util"
 )
 
@@ -38,6 +39,7 @@ var solutions = map[int]util.Solution{
 	202303: new(gearratios.Solution),
 	202304: new(scratchcards.Solution),
 	202305: new(fertilizer.Solution),
+	202306: new(waitforit.Solution),
 }
 
 func main() {
