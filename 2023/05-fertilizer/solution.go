@@ -105,6 +105,24 @@ func (r *Range) Append(b Bound) {
 	r.Bounds = append(r.Bounds, b)
 }
 
+func (r *Range) FillGaps() {
+	for i, current := range r.Bounds[1:] {
+		prev := r.Bounds[i]
+		if prev.Upper()+1 == current.Lower() {
+			continue
+		}
+		filler := Bound{
+			Source:      prev.Upper() + 1,
+			Length:      current.Lower() - prev.Upper() - 1,
+			Destination: prev.Upper() + 1,
+		}
+		// Expand the slice by 1
+		r.Bounds = append(r.Bounds[:i+1], r.Bounds[i:]...)
+		// i+1 because i is ahead by 1 with the slice operation
+		r.Bounds[i+1] = filler
+	}
+}
+
 func (r *Range) Sort() {
 	slices.SortFunc[[]Bound, Bound](r.Bounds, func(a, b Bound) int {
 		return a.Source - b.Source
@@ -197,8 +215,10 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 	}
 
 	// Add caps
+	// Also fill in gaps!
 	for i := range s.Ranges {
 		s.Ranges[i].AddCaps()
+		s.Ranges[i].FillGaps()
 	}
 
 	return
@@ -218,8 +238,6 @@ func (s Solution) Part1(w io.Writer) (err error) {
 	return
 }
 
-// Too high: 225749547
-// Goal:     17729182
 func (s Solution) Part2(w io.Writer) (err error) {
 	min := math.MaxUint32
 	for i := 0; i < len(s.Seeds); i += 2 {
