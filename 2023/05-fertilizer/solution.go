@@ -24,7 +24,56 @@ type Bound struct {
 	Length      int
 }
 
+func (b Bound) Lower() int {
+	return b.Source
+}
+
+func (b Bound) Upper() int {
+	return b.Source + b.Length - 1
+}
+
+func (b Bound) Delta() int {
+	return b.Destination - b.Source
+}
+
+func (b Bound) Overlaps(a Bound) bool {
+	// b fully contains a
+	// b ... a ... a ... b
+	if b.Lower() <= a.Lower() && b.Upper() >= a.Upper() {
+		return true
+	}
+	// b starts before a and there is overlap
+	// b ... a ... b ... a
+	if b.Lower() <= a.Lower() && b.Upper() >= a.Lower() && b.Upper() <= a.Upper() {
+		return true
+	}
+	// b starts after a and there is overlap
+	// a ... b ... a ... b
+	if b.Lower() >= a.Lower() && b.Lower() <= a.Upper() && b.Upper() >= a.Upper() {
+		return true
+	}
+	return false
+}
+
+func (b Bound) Split(a Bound) (chunks []Bound) {
+	chunks = make([]Bound, 1, 2)
+	chunks[0] = a
+	if b.Upper() < a.Upper() {
+		chunks[0].Length = b.Upper() - chunks[0].Lower() + 1
+		chunks = append(chunks, Bound{
+			Source: b.Upper() + 1,
+			Length: a.Length - chunks[0].Length,
+		})
+	}
+	return
+}
+
+func (b Bound) String() string {
+	return fmt.Sprintf("<%d, %d>", b.Lower(), b.Upper())
+}
+
 type Range struct {
+	Name   string
 	Bounds []Bound
 }
 
@@ -42,12 +91,11 @@ func (r *Range) AddCaps() {
 	}
 
 	lastBound := r.Bounds[len(r.Bounds)-1]
-	lastSource := lastBound.Source + lastBound.Length
-	if lastSource < math.MaxUint32 {
+	if lastBound.Upper() < math.MaxUint32 {
 		r.Bounds = append(r.Bounds, Bound{
-			Destination: lastSource,
-			Source:      lastSource,
-			Length:      math.MaxUint32 - lastSource,
+			Destination: lastBound.Upper(),
+			Source:      lastBound.Upper(),
+			Length:      math.MaxUint32 - lastBound.Upper(),
 		})
 	}
 
@@ -63,79 +111,41 @@ func (r *Range) Sort() {
 	})
 }
 
-func (r Range) Destination(source int, length int) (destinations [][2]int) {
-	destinations = make([][2]int, 0, 16)
-	for _, b := range r.Bounds {
-		if source < b.Source || source >= b.Source+b.Length {
+func (r Range) Destinations(b Bound) (destinations []Bound) {
+	destinations = make([]Bound, 0, 16)
+	for _, bound := range r.Bounds {
+		if !bound.Overlaps(b) {
 			continue
 		}
-
-		dest := [2]int{b.Destination + (source - b.Source), length}
-
-		if source+length-1 > b.Source+b.Length {
-			dest[1] = b.Length - (source - b.Source)
-			source = b.Source + b.Length
-			length = length - dest[1]
+		chunks := bound.Split(b)
+		destinations = append(destinations, Bound{
+			Source: chunks[0].Source + bound.Delta(),
+			Length: chunks[0].Length,
+		})
+		if len(chunks) == 2 {
+			b = chunks[1]
 		}
-
-		destinations = append(destinations, dest)
 	}
 	return
 }
 
 type Solution struct {
-	Seeds                 []int
-	SeedToSoil            Range
-	SoilToFertilizer      Range
-	FertilizerToWater     Range
-	WaterToLight          Range
-	LightToTemperature    Range
-	TemperatureToHumidity Range
-	HumidityToLocation    Range
+	Seeds  []int
+	Ranges []Range
 }
 
-func (s Solution) Location(seed int, length int) (locs [][2]int) {
-	soils := s.SeedToSoil.Destination(seed, length)
-	// fmt.Printf("Soils: %v\n", soils)
+func (s Solution) Location(seed Bound) (locs []Bound) {
+	destinations := []Bound{seed}
 
-	ferts := make([][2]int, 0, 32)
-	for _, soil := range soils {
-		ferts = append(ferts, s.SoilToFertilizer.Destination(soil[0], soil[1])...)
+	for _, r := range s.Ranges {
+		sources := make([]Bound, len(destinations))
+		copy(sources, destinations)
+		destinations = destinations[:0]
+		for _, source := range sources {
+			destinations = append(destinations, r.Destinations(source)...)
+		}
 	}
-	// fmt.Printf("Fers: %v\n", ferts)
-
-	waters := make([][2]int, 0, 32)
-	for _, fert := range ferts {
-		waters = append(waters, s.FertilizerToWater.Destination(fert[0], fert[1])...)
-	}
-	// fmt.Printf("Waters: %v\n", waters)
-
-	lights := make([][2]int, 0, 32)
-	for _, water := range waters {
-		lights = append(lights, s.WaterToLight.Destination(water[0], water[1])...)
-	}
-	// fmt.Printf("Lights: %v\n", lights)
-
-	temps := make([][2]int, 0, 32)
-	for _, light := range lights {
-		temps = append(temps, s.LightToTemperature.Destination(light[0], light[1])...)
-	}
-	// fmt.Printf("Temps: %v\n", temps)
-
-	humids := make([][2]int, 0, 32)
-	for _, temp := range temps {
-		humids = append(humids, s.TemperatureToHumidity.Destination(temp[0], temp[1])...)
-	}
-	// fmt.Printf("Humids: %v\n", humids)
-
-	locs = make([][2]int, 0, 32)
-	for _, humid := range humids {
-		locs = append(locs, s.HumidityToLocation.Destination(humid[0], humid[1])...)
-	}
-
-	fmt.Println(locs)
-	fmt.Println()
-	return
+	return destinations
 }
 
 func (s Solution) Files() embed.FS {
@@ -148,39 +158,26 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Add bounds to beginning and end of range
-		if line == "" && target != nil {
-			target.AddCaps()
-		}
-
 		// Skip blank lines
 		if line == "" {
 			continue
 		}
 
 		fields := strings.Fields(line)
-		switch fields[0] {
-		case "seeds:":
+		switch {
+		case fields[0] == "seeds:":
 			s.Seeds = make([]int, len(fields[1:]))
 			for i, v := range fields[1:] {
 				if s.Seeds[i], err = strconv.Atoi(v); err != nil {
 					return
 				}
 			}
-		case "seed-to-soil":
-			target = &s.SeedToSoil
-		case "soil-to-fertilizer":
-			target = &s.SoilToFertilizer
-		case "fertilizer-to-water":
-			target = &s.FertilizerToWater
-		case "water-to-light":
-			target = &s.WaterToLight
-		case "light-to-temperature":
-			target = &s.LightToTemperature
-		case "temperature-to-humidity":
-			target = &s.TemperatureToHumidity
-		case "humidity-to-location":
-			target = &s.HumidityToLocation
+		case fields[1] == "map:":
+			s.Ranges = append(s.Ranges, Range{
+				Name:   fields[0],
+				Bounds: make([]Bound, 0, 16),
+			})
+			target = &s.Ranges[len(s.Ranges)-1]
 		default:
 			if target == nil {
 				return fmt.Errorf("target is nil")
@@ -199,22 +196,21 @@ func (s *Solution) Parse(r io.Reader) (err error) {
 		}
 	}
 
-	// Need to add caps to final range
-	target.AddCaps()
-
-	for _, b := range s.SeedToSoil.Bounds {
-		fmt.Printf("%d -> %d\n", b.Source, b.Source+b.Length-1)
+	// Add caps
+	for i := range s.Ranges {
+		s.Ranges[i].AddCaps()
 	}
 
 	return
 }
 
 func (s Solution) Part1(w io.Writer) (err error) {
-	min := math.MaxInt
-	for _, seed := range s.Seeds {
-		for _, loc := range s.Location(seed, 1) {
-			if loc[0] < min {
-				min = loc[0]
+	min := math.MaxUint32
+	for _, source := range s.Seeds {
+		seed := Bound{Source: source, Length: 1}
+		for _, loc := range s.Location(seed) {
+			if loc.Lower() < min {
+				min = loc.Lower()
 			}
 		}
 	}
@@ -227,9 +223,10 @@ func (s Solution) Part1(w io.Writer) (err error) {
 func (s Solution) Part2(w io.Writer) (err error) {
 	min := math.MaxUint32
 	for i := 0; i < len(s.Seeds); i += 2 {
-		for _, loc := range s.Location(s.Seeds[i], s.Seeds[i+1]) {
-			if loc[0] < min {
-				min = loc[0]
+		seed := Bound{Source: s.Seeds[i], Length: s.Seeds[i+1]}
+		for _, loc := range s.Location(seed) {
+			if loc.Lower() < min {
+				min = loc.Lower()
 			}
 		}
 	}
