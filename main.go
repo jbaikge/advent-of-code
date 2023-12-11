@@ -106,9 +106,9 @@ func main() {
 			fmt.Printf("  Part 2: %d", answer)
 			if data.Expect2 != 0 {
 				if answer == data.Expect2 {
-					fmt.Println(" (Pass)")
+					fmt.Print(" (Pass)")
 				} else {
-					fmt.Println(" (Fail)")
+					fmt.Print(" (Fail)")
 				}
 			}
 			fmt.Println()
