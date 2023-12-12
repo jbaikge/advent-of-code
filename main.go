@@ -27,6 +27,7 @@ import (
 	"github.com/jbaikge/advent-of-code/util"
 
 	_ "github.com/jbaikge/advent-of-code/2023/07-camel-cards"
+	_ "github.com/jbaikge/advent-of-code/2023/08-haunted-wasteland"
 )
 
 var utilSolutions = map[int]util.Solution{
